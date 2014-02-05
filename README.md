@@ -1,7 +1,7 @@
 summary-viewer-template
 =======================
 
-#Summary Viewer is a configurable application template that summarizes the numeric attributes of features in operational layer that are within the visible map area.
+*Summary Viewer is a configurable application template that summarizes the numeric attributes of features in operational layer that are within the visible map area.
 
 ![Screen Shot](https://dl.dropboxusercontent.com/u/24627279/screenshots/summary-viewer-thumb.png)
 
