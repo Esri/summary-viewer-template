@@ -10,8 +10,10 @@
 	    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 	    <!-- End Mobile -->
 		<!--Use protocol relative urls that way if the browser is viewing the page via HTTPS the js/css file will be requested using the HTTPS protocol-->
-		<link rel="stylesheet" href="//js.arcgis.com/3.10/js/dojo/dijit/themes/claro/claro.css">
-		<link rel="stylesheet" type="text/css" href="//js.arcgis.com/3.10/js/esri/css/esri.css">
+
+        <link rel="stylesheet"  href="//js.arcgis.com/3.11/dijit/themes/claro/claro.css">
+        <link rel="stylesheet"  href="//js.arcgis.com/3.11/esri/css/esri.css">
+
 		<!--Load any application specific styles-->
 		<link rel="stylesheet" type="text/css" href="css/main.css">
 		<!--<link rel="stylesheet" type="text/css" href="css/counter.css">-->
@@ -99,14 +101,14 @@
                     location : package_path + '/js'
                 }, {
                     name : "templateConfig",
-                    location : package_path
+                    location : package_path//.substr(0,package_path.lastIndexOf('/')) //commented out for local updates
                 }, {
                     name : "config",
                     location : package_path + '/config'
                 }]
             };
 		</script>
-		<script type="text/javascript" src="//js.arcgis.com/3.10/"></script>
+		<script type="text/javascript" src="//js.arcgis.com/3.11/"></script>
 		<script type="text/javascript">
             require(["dojo/on", "application/main", "application/template", "dojo/domReady!"], function(on, Main, Template) {
                 //create the template. This will take care of all the logic required for template applications
