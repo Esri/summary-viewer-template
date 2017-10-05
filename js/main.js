@@ -15,8 +15,6 @@ define([
         "esri/dijit/BasemapGallery",
         "esri/graphic",
         "esri/graphicsUtils",
-        "esri/IdentityManager", 
-        "esri/layers/FeatureLayer", 
         "esri/tasks/query",
         "esri/tasks/StatisticDefinition",
         "application/ClusterLayer",
@@ -38,8 +36,6 @@ define([
         BasemapGallery,
         Graphic,
         graphicsUtils,
-        IdentityManager, 
-        FeatureLayer,
         Query,
         StatisticDefinition,
         ClusterLayer,
@@ -72,9 +68,10 @@ define([
       fieldTypes : "esriFieldTypeSmallInteger,esriFieldTypeInteger,esriFieldTypeSingle,esriFieldTypeDouble",
       filterString : false,
       timer : null,
+      defExpr: null,
 
-      // constructor
-      constructor : function(config) {
+      // startup
+      startup : function(config) {
          //config will contain application and user defined info for the template such as i18n strings, the web map id
          // and application id
          // any url parameters and any application specific configuration information.
@@ -90,6 +87,26 @@ define([
          }));
       },
 
+      reportError: function (error) {
+        // remove loading class from body
+        domClass.remove(document.body, "app-loading");
+        domClass.add(document.body, "app-error");
+        // an error occurred - notify the user. In this example we pull the string from the
+        // resource.js file located in the nls folder because we've set the application up
+        // for localization. If you don't need to support multiple languages you can hardcode the
+        // strings here and comment out the call in index.html to get the localization strings.
+        // set message
+        var node = dom.byId("loading_message");
+        if (node) {
+          if (this.config && this.config.i18n) {
+            node.innerHTML = this.config.i18n.map.error + ": " + error.message;
+          } else {
+            node.innerHTML = "Unable to create map: " + error.message;
+          }
+        }
+        return error;
+      },
+
       // initialize UI
       initUI : function() {
          this.loadUI();
@@ -98,13 +115,26 @@ define([
 
       // load UI
       loadUI : function() {
+         var tip = "Close";
+         if (this.config && this.config.i18n) {
+            tip = this.config.i18n.tooltips.close;
+         }
          var msgClose = dom.byId("msgClose");
+         msgClose.alt = tip;
          on(msgClose, "click", this.closeMessage);
          query(".bg").style("backgroundColor", this.config.color);
+         
          if (this.config.logo)
             dom.byId("logo").src = this.config.logo;
          dom.byId("panelMain").innerHTML = this.config.title;
 
+         tip = "Switch base map";
+         if (this.config && this.config.i18n) {
+            tip = this.config.i18n.tooltips.switchbasemap;
+         }
+         dom.byId("basemap").alt = tip;
+         dom.byId("basemap").title = tip;
+         
          var basemapTitle = dom.byId("basemapTitle");
          on(basemapTitle, "click", function() {
             domClass.toggle("panelBasemaps", "panelBasemapsOn");
@@ -142,9 +172,9 @@ define([
 
          arcgisUtils.createMap(this.config.webmap, "mapDiv", {
             mapOptions : {
-               showAttribution : false
+               showAttribution : false,
+               editable : false
             },
-            editable: false,
             bingMapsKey : this.config.bingmapskey
          }).then(lang.hitch(this, function(response) {
 
@@ -178,20 +208,24 @@ define([
             //resource.js file located in the nls folder because we've set the application up
             //for localization. If you don't need to support mulitple languages you can hardcode the
             //strings here and comment out the call in index.html to get the localization strings.
-            if (this.config && this.config.i18n) {
-               alert(this.config.i18n.map.error + ": " + error.message);
-            } else {
-               alert("Unable to create map: " + error.message);
-            }
+            // if (this.config && this.config.i18n) {
+            //    alert(this.config.i18n.map.error + ": " + error.message);
+            // } else {
+            //    alert("Unable to create map: " + error.message);
+            // }
+            this.reportError(error);
          }));
       },
 
       // map loaded
       mapLoaded : function() {
          // Map is ready
+         domClass.remove(document.body, "app-loading");
          query(".esriSimpleSlider").style("backgroundColor", this.config.color);
          var basemapGallery = new BasemapGallery({
             showArcGISBasemaps : true,
+            portalUrl: this.config.sharinghost,
+            basemapsGroup: this._getBasemapGroup(),
             map : this.map
          }, "basemapGallery");
          basemapGallery.startup();
@@ -200,12 +234,29 @@ define([
          });
          this.processOperationalLayers();
       },
+     
+      // get basemap group
+      _getBasemapGroup: function () {
+            //Get the id or owner and title for an organizations custom basemap group.
+            var basemapGroup = null;
+            if (this.config.basemapgroup && this.config.basemapgroup.title && this.config.basemapgroup.owner) {
+                basemapGroup = {
+                    "owner": this.config.basemapgroup.owner,
+                    "title": this.config.basemapgroup.title
+                };
+            } else if (this.config.basemapgroup && this.config.basemapgroup.id) {
+                basemapGroup = {
+                    "id": this.config.basemapgroup.id
+                };
+            }
+            return basemapGroup;
+        },
 
       // process operational layers
       processOperationalLayers : function() {
          var opLayerName = this.config.summaryLayer.id;
          var me = this;
-         if (opLayerName != "") {
+         if (opLayerName !== "") {
             array.forEach(this.opLayers, function(layer) {
                if (layer.featureCollection) {
                   for (var i = 0; i < layer.featureCollection.layers.length; i++) {
@@ -216,6 +267,9 @@ define([
                      }
                   }
                } else if (layer.layerObject && layer.layerObject.type == "Feature Layer" && layer.id == opLayerName) {
+                  if(layer.layerDefinition && layer.layerDefinition.definitionExpression && layer.layerDefinition.definitionExpression != "") {
+                    me.defExpr = layer.layerDefinition.definitionExpression;
+                  }
                   me.opLayer = layer.layerObject;
                }
             });
@@ -244,6 +298,9 @@ define([
                   }
                }
             } else if (layer.layerObject && layer.layerObject.type == "Feature Layer") {
+               if(layer.layerDefinition && layer.layerDefinition.definitionExpression && layer.layerDefinition.definitionExpression) {
+                  this.defExpr = layer.layerDefinition.definitionExpression;
+               }
                var flds = this.getSummaryFields(layer.layerObject);
                if (flds.length > 0)
                   return layer.layerObject;
@@ -298,7 +355,7 @@ define([
          this.loadPages();
 
          if (this.opLayer.geometryType == "esriGeometryPoint") {
-            if (this.config.cluster == true) {
+            if (this.config.cluster === true) {
                this.cluster = true;
                this.clusterLayer.setVisibility(true);
                this.opLayer.setOpacity(0.0001);
@@ -306,7 +363,7 @@ define([
             this.opLayer.setVisibility(true);
          }
 
-         if (this.fields.length == 0) {
+         if (this.fields.length === 0) {
             this.showMessage("No Numeric Attributes in Operational Layer");
          } else {
             this.closeMessage();
@@ -516,7 +573,7 @@ define([
                      var statDef = new StatisticDefinition();
                      statDef.statisticType = "count";
                      statDef.onStatisticField = fld.name;
-                     statDef.outStatisticFieldName = "COUNT";
+                     statDef.outStatisticFieldName = "RECCOUNT";
                      query.returnGeometry = false;
                      query.where = "1=1";
                      query.orderByFields = [fld.name];
@@ -588,7 +645,7 @@ define([
             this.opLayer.clear();
             for (var i = 0; i < graphics.length; i++) {
                var g = graphics[i];
-               if ((g.attributes[this.config.filterField] == value) || (value == "")){
+               if ((g.attributes[this.config.filterField] == value) || (value === "")){
                   var newg = new Graphic(g.geometry, g.symbol, g.attributes);
                   this.opLayer.add(newg);
                } 
@@ -604,8 +661,18 @@ define([
             var expr = this.config.filterField + " = " + value;
             if (this.filterString)
                expr = this.config.filterField + " = '" + value + "'";
-            if (value == "")
+            if (value === "")
                expr = null;
+            
+            // Original Expr
+            if (this.defExpr) {
+              if (expr) {
+                expr += " AND " + this.defExpr;
+              } else {
+                expr = this.defExpr;
+              }
+            }
+
             this.opLayer.setDefinitionExpression(expr);
             if (expr) {
                var query = new Query();
@@ -629,12 +696,22 @@ define([
       summarizeFeatures : function() {
          var ext = this.map.extent;
          var features = [];
+         
+         var normExts = ext.normalize();
+         if (normExts.length > 0) {
+            ext = normExts[0];
+            for (var j=1; j<normExts.length; j++) {
+               ext = ext.union(normExts[j]);
+            }
+         }
+         
          for (var i = 0; i < this.opLayer.graphics.length; i++) {
             var gra = this.opLayer.graphics[i];
             if (ext.intersects(gra.geometry)) {
                features.push(gra);
             }
          }
+         
          if (this.cluster)
             this.clusterLayer.setFeatures(features);
          this.count = features.length;
@@ -652,11 +729,11 @@ define([
             title = count + " Feature";
          var sumData = this.summarizeAttributes(data);
          var info = "";
-         for ( f = 0; f < this.fieldCount; f++) {
-            if (f == 0 && this.config.hideCount) {
+         for ( var f = 0; f < this.fieldCount; f++) {
+            if (f === 0 && this.config.hideCount) {
                //skip
             } else {
-               info += this.aliases[f] + ": " + sumData[f] + "<br/><br/>";
+               info += this.aliases[f] + ": " + Math.round(sumData[f]*100)/100 + "<br/><br/>";
             }
          }
          this.map.infoWindow.setTitle(title);
@@ -714,7 +791,7 @@ define([
             for ( f = 0; f < this.minFields.length; f++) {
                var fld = this.minFields[f].replace(/^\s+|\s+$/g, '');
                value = gra.attributes[fld];
-               if (i == 0) {
+               if (i === 0) {
                   minArray[f] = value;
                } else {
                   if (value < minArray[f])
@@ -733,7 +810,7 @@ define([
             for ( f = 0; f < this.maxFields.length; f++) {
                var fld = this.maxFields[f].replace(/^\s+|\s+$/g, '');
                value = gra.attributes[fld];
-               if (i == 0) {
+               if (i === 0) {
                   maxArray[f] = value;
                } else {
                   if (value > maxArray[f])
@@ -782,7 +859,9 @@ define([
          // num = Math.floor(value*10/ 1000000000)/10;
          // units = "BILLIONS";
          // }
-         if (value >= 10, 000, 000, 000, 000) {
+         if (value > 1000)
+            num = Math.round(value);
+         if (value >= 10000000000000) {
             num = Math.floor(value * 10 / 1000000000000) / 10;
             units = "TRILLIONS";
          }
